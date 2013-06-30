@@ -50,28 +50,31 @@ void templateAppInit( int width, int height )
 	GFX_start();
 
 	glViewport( 0.0f, 0.0f, width, height );
-
-   // Now use the GFX_set_matrix mode function to tell the GFX implementation to focus the projection matrix in order to setup a 2D projection
-    GFX_set_matrix_mode(PROJECTION_MATRIX);
     
     float half_width = (float) width/2;
     float half_height = (float) height/2;
     
-    //make sure that hte current matrix is clean
-    GFX_load_identity();
-    
-    //set the projection matrix right in the midle of the screeen, using 1:1 ratio between GL units and screen pixels
-    GFX_set_orthographic_2d(-half_width, half_width, -half_height, half_height);
-    
-    //translate the matrix to the bottom left of the screen because opengl uses the bottom left corner as (0,0)
-    GFX_translate( -half_width, -half_height, 0.0f );
-    
-    //disable the depth buffer
-    glDisable(GL_DEPTH_TEST);
-    
-    //disable the depth mask
-    glDepthMask(GL_FALSE);
-    
+    // Now use the GFX_set_matrix mode function to tell the GFX implementation to focus the projection matrix in order to setup a 2D projection
+    GFX_set_matrix_mode(PROJECTION_MATRIX);
+    {
+        
+		GFX_load_identity();
+		
+		GFX_set_perspective(
+        /* Field of view angle in degree. */
+                            45.0f,
+        /* The screen aspect ratio. */
+                            ( float )width / ( float )height,
+        /* The near clipping plane. */
+                            0.01f,
+        /* The far clipping plane. */
+                            100.0f,
+        /* The device screen orientation in angle to use. */
+                            0.0f );
+		glDisable( GL_CULL_FACE );
+    }
+ 
+       
     //initialize the program variable pointer
     program = PROGRAM_init((char*)"default");
     
@@ -110,85 +113,75 @@ void templateAppInit( int width, int height )
 
 void templateAppDraw( void )
 {
-    //the vertices
-    static const float POSITION[ 8 ] =
-    {
-        0.0f, 0.0f, // Down left (pivot point)
-        1.0f, 0.0f, // Up left
-        0.0f, 1.0f, // Down right
-        1.0f, 1.0f // Up right
-    };
-    
-    //the vertex colors
-    static const float COLOR[ 16 ] = {
-        1.0f /* R */, 0.0f /* G */, 0.0f /* B */, 1.0f /* A */,/* Red */
-        0.0f, 1.0f, 0.0f, 1.0f, /* Green */
-        0.0f, 0.0f, 1.0f, 1.0f, /* Blue */
-        1.0f, 1.0f, 0.0f, 1.0f /* Yellow */
-    };
-    
-    //clean the color buffer with a light gray
-    glClearColor( 0.5f, 0.5f, 0.5f, 1.0f );
+    static const float POSITION[ 12 ] = {
+        -0.5f, 0.0f, -0.5f, // Bottom left
+        0.5f, 0.0f, -0.5f,
+        -0.5f, 0.0f,  0.5f,
+        0.5f, 0.0f,  0.5f // Top right
+	};
 	
-    glClear( GL_COLOR_BUFFER_BIT );
-	/* Select the model view matrix. */
-    GFX_set_matrix_mode( MODELVIEW_MATRIX );
-    /* Reset it to make sure you are going to deal with a clean
-     identity matrix. */
-    GFX_load_identity();
-    /* Scale the quad to be 100px by 100px. */
-    GFX_scale( 100.0f, 100.0f, 0.0f );
+	static const float COLOR[ 16 ] = {
+        1.0f, 0.0f, 0.0f, 1.0f, // Red
+        0.0f, 1.0f, 0.0f, 1.0f, // Green
+        0.0f, 0.0f, 1.0f, 1.0f, // Blue
+        1.0f, 1.0f, 0.0f, 1.0f  // Yellow
+	};
     
-    //make we have a valid shader program id
-    if( program->pid )
-    {
-        // two temporary variables that you will use to hold the vertex attribute and uniform locations
-        char attribute, uniform;
-        glUseProgram( program->pid );
+	glClearColor( 0.5f, 0.5f, 0.5f, 1.0f );
+    
+	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+	
+	GFX_set_matrix_mode( MODELVIEW_MATRIX );
+	
+	GFX_load_identity();
+    
+	vec3 e = { 0.0f, -3.0f, 0.0f },
+    c = { 0.0f,  0.0f, 0.0f },
+    u = { 0.0f,  0.0f, 1.0f };
+    
+	GFX_look_at( &e, &c, &u );
+    
+	static float y = 0.0f;
+	
+	y += 0.1f;
+	
+	//GFX_translate( 0.0f, y, 0.0f );
+    
+	GFX_rotate( y * 50.0f,
+               1.0f,
+               1.0f,
+               1.0f );
+    
+	if( program->pid ) {
         
-        //retrieve uniform variable from video memory
-        uniform = PROGRAM_get_uniform_location( program,
-                                     ( char * )"MODELVIEWPROJECTIONMATRIX");
+		char attribute, uniform;
+		
+		glUseProgram( program->pid );
         
-        glUniformMatrix4fv(
-        /* The location value of the uniform. */ uniform,
-        /* How many 4x4 matrix */ 1,
-        /* Specify to do not transpose the matrix. */GL_FALSE,
-        /* Use the GFX helper function to calculate the result of the
-         current model view matrix multiplied by the current projection matrix. */( float * )GFX_get_modelview_projection_matrix() );
+		uniform = PROGRAM_get_uniform_location( program,
+                                               ( char * )"MODELVIEWPROJECTIONMATRIX" );
+		
+		glUniformMatrix4fv( uniform,
+                           1 /* How many 4x4 matrix */,
+                           GL_FALSE /* Transpose the matrix? */,
+                           ( float * )GFX_get_modelview_projection_matrix() );
         
-        //retrieve the location of the vertex position
-        attribute = PROGRAM_get_vertex_attrib_location( program, ( char * )"POSITION");
+		attribute = PROGRAM_get_vertex_attrib_location( program,
+                                                       ( char * )"POSITION" );
         
-        glEnableVertexAttribArray( attribute );
+		glEnableVertexAttribArray( attribute );
+		
+		glVertexAttribPointer( attribute, 3, GL_FLOAT, GL_FALSE, 0, POSITION );
+		
+		attribute = PROGRAM_get_vertex_attrib_location( program,
+                                                       ( char * )"COLOR" );
         
+		glEnableVertexAttribArray( attribute );
+		
+		glVertexAttribPointer( attribute, 4, GL_FLOAT, GL_FALSE, 0, COLOR );
         
-        glVertexAttribPointer(
-        /* The attribute location */
-                              attribute,
-        /* How many elements; XY in this case, so 2. */ 2,
-        /* The variable type. */
-                              GL_FLOAT,
-        /* Do not normalize the data. */
-                              GL_FALSE,
-        /* The stride in bytes of the array delimiting the elements,
-         in this case none. */ 0,
-        /* The vertex position array pointer. */ POSITION );
-        
-        attribute = PROGRAM_get_vertex_attrib_location( program,
-                                                       ( char * )"COLOR" ); glEnableVertexAttribArray( attribute );
-        glVertexAttribPointer(attribute,
-                              4,
-                              GL_FLOAT,
-                              GL_FALSE, 0,
-                              COLOR );
-        glDrawArrays(
-        /* The drawing mode. */ GL_TRIANGLE_STRIP,
-        /* Start at which index. */ 0,
-        /* Start at which index. */ 4 );
-    }
-    //check the GFX_error as a safety measure
-    GFX_error();
+		glDrawArrays( GL_TRIANGLE_STRIP, 0, 4 );
+	}		
     console_print("templateAppDraw\n");
 }
 
